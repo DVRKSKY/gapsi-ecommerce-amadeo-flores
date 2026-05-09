@@ -41,5 +41,3 @@ Crea `.env.local` en la raíz con estas claves (sin commitear el archivo):
 | `RAPIDAPI_HOST` | Host del servicio Walmart en RapidAPI |
 | `WALMART_API_URL` | URL base de la API |
 | `NEXT_PUBLIC_LINKEDIN_URL` | Enlace público (footer / perfil) |
-
-No subas valores reales al repositorio; rota la clave si se filtró.
