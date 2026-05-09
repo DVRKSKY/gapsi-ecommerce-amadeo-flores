@@ -1,7 +1,30 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "i5.walmartimages.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "i.walmartimages.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "i4.walmartimages.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "i5-st.walmartimages.com",
+        pathname: "/**",
+      },
+    ],
+  },
 };
 
 export default nextConfig;
