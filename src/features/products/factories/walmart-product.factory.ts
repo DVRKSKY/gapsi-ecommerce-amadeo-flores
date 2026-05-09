@@ -72,6 +72,57 @@ function extractFlexiblePrice(api: WalmartApiProduct): number | null {
   );
 }
 
+const BAD_PRICE_KEY = /range|flip|display|condition|type|percentage|b2b|support|pretext|dual|subscription/i;
+
+function gatherKeyedPrices(root: unknown): number[] {
+  const bag: number[] = [];
+
+  const absorbPriceValue = (node: unknown, depth: number) => {
+    if (depth > 14) return;
+    if (typeof node === "number" && node > 0 && node < 500_000) {
+      bag.push(node);
+      return;
+    }
+    if (typeof node === "string") {
+      const n = priceFromScalar(node);
+      if (n !== null && n > 0) bag.push(n);
+      return;
+    }
+    if (Array.isArray(node)) {
+      for (const x of node) absorbPriceValue(x, depth + 1);
+      return;
+    }
+    if (!node || typeof node !== "object") return;
+    for (const v of Object.values(node as Record<string, unknown>)) absorbPriceValue(v, depth + 1);
+  };
+
+  const walk = (node: unknown, depth: number) => {
+    if (depth > 18) return;
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const x of node) walk(x, depth + 1);
+      return;
+    }
+    const r = node as Record<string, unknown>;
+    for (const [k, v] of Object.entries(r)) {
+      const lk = k.toLowerCase();
+      const priceish = lk.includes("price") && !BAD_PRICE_KEY.test(k);
+      const costish = lk === "cost" || lk.endsWith("cost");
+      if (priceish || costish) absorbPriceValue(v, depth + 1);
+      else walk(v, depth + 1);
+    }
+  };
+
+  walk(root, 0);
+  return bag;
+}
+
+function guessPriceFromSubtree(api: WalmartApiProduct): number | null {
+  const nums = [...new Set(gatherKeyedPrices(api))].filter((n) => n > 0);
+  if (nums.length === 0) return null;
+  return Math.min(...nums);
+}
+
 function coerceId(raw: unknown): string | null {
   if (raw === undefined || raw === null) return null;
   const s = String(raw).trim();
@@ -124,9 +175,23 @@ export function pickRelatedHints(blob: WalmartApiProduct): string[] {
   return hints.slice(0, 8);
 }
 
+function idHintFromCanonical(u: string | null): string | null {
+  if (!u) return null;
+  const m = u.match(/\/(\d{6,})\b/);
+  return m?.[1] ? m[1] : null;
+}
+
 function coerceWalmartListingId(blob: WalmartApiProduct | WalmartVariantRaw): string | null {
   const rec = blob as Record<string, unknown>;
-  return coerceId(blob.usItemId) ?? coerceId(rec["itemId"]) ?? coerceId(rec["id"]);
+  const canStr = typeof rec.canonicalUrl === "string" ? rec.canonicalUrl.trim() : "";
+  const can = canStr.length > 0 ? canStr : null;
+  return (
+    coerceId(blob.usItemId) ??
+    coerceId(rec["itemId"]) ??
+    coerceId(rec["productId"]) ??
+    idHintFromCanonical(can) ??
+    coerceId(rec["id"])
+  );
 }
 
 export function mapApiVariant(raw: WalmartVariantRaw): ProductVariant | null {
@@ -153,8 +218,12 @@ export function mapApiProductToPreview(api: WalmartApiProduct): ProductPreview |
     coerceString(recProd["productName"]);
   if (!id || !name) return null;
 
-  const priceNum = extractFlexiblePrice(api);
-  if (priceNum === null) return null;
+  let priceUnresolved = false;
+  let priceNum = extractFlexiblePrice(api) ?? guessPriceFromSubtree(api);
+  if (priceNum === null) {
+    priceUnresolved = true;
+    priceNum = 0;
+  }
 
   const imgMain =
     coerceString(api.image) ??
@@ -219,6 +288,7 @@ export function mapApiProductToPreview(api: WalmartApiProduct): ProductPreview |
     id,
     name,
     price: priceNum,
+    ...(priceUnresolved ? { priceUnresolved: true as const } : {}),
     currency: WALMART_LIST_CURRENCY,
     shortDescription: shortDesc,
     canonicalUrl: canonical,
@@ -290,6 +360,7 @@ export function previewToShopProductDisplay(preview: ProductPreview): ShopProduc
     name: preview.name,
     subtitle: preview.shortDescription ?? preview.sellerName ?? undefined,
     price: preview.price,
+    ...(preview.priceUnresolved ? { priceUnresolved: true as const } : {}),
     currency: preview.currency,
     badge: preview.availabilityDisplay ?? undefined,
     ...(imageSrc ? { imageSrc } : {}),
@@ -303,6 +374,7 @@ export function catalogDetailToShopDisplay(detail: ProductDetail): ShopProductDi
     name: detail.name,
     subtitle: detail.shortDescription ?? detail.sellerName ?? undefined,
     price: detail.price,
+    ...(detail.priceUnresolved ? { priceUnresolved: true as const } : {}),
     currency: detail.currency,
     badge: detail.availabilityDisplay ?? undefined,
     ...(thumb ? { imageSrc: thumb } : {}),

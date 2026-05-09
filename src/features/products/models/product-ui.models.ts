@@ -14,6 +14,8 @@ export type ProductPreview = {
   id: string;
   name: string;
   price: number;
+  /** true si no encontramos un precio fiable en el JSON (solo mostramos texto en UI). */
+  priceUnresolved?: boolean;
   currency: string;
   shortDescription: string | null;
   canonicalUrl: string | null;

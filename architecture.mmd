@@ -1,0 +1,20 @@
+%% gapsi-ecommerce — vista de capas (Mermaid)
+
+flowchart TB
+  subgraph cliente["Cliente (React)"]
+    UI["UI + Tailwind"]
+    Z["Zustand\n(carrito, drag UI)"]
+    RQ["TanStack React Query\n(fetch + caché)"]
+    AJ["anime.js\ncreateDraggable → carrito"]
+  end
+
+  subgraph next["Next.js"]
+    P["Páginas / layouts"]
+    S["Rutas servidor / gateways"]
+  end
+
+  UI --> Z
+  UI --> RQ
+  UI --> AJ
+  RQ --> S
+  S --> EXT["API / fuente de datos\n(ej. Walmart)"]

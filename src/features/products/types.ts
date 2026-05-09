@@ -9,6 +9,8 @@ export type ShopProductDisplay = {
   name: string;
   subtitle?: string;
   price: number;
+  /** Si existe, la tarjeta no formatea `price` como moneda */
+  priceUnresolved?: boolean;
   currency?: string;
   badge?: string;
   imageSrc?: string;

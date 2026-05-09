@@ -1,184 +1,221 @@
-import type { WalmartApiProduct, WalmartPagePropsShape, WalmartProductsResponse } from "../api/walmart-raw.types";
+import type { WalmartApiProduct } from "../api/walmart-raw.types";
 
-function asRecord(v: unknown): Record<string, unknown> | null {
-  if (!v || typeof v !== "object") return null;
-  if (Array.isArray(v)) return null;
-  return v as Record<string, unknown>;
-}
-
-function readPageProps(data: unknown): WalmartPagePropsShape | undefined {
-  const root = asRecord(data);
-  if (!root) return undefined;
-
-  const direct = root["pageProps"];
-  if (direct && typeof direct === "object" && !Array.isArray(direct)) {
-    return direct as WalmartPagePropsShape;
-  }
-
-  const props = root["props"];
-  const propsRec = asRecord(props);
-  if (!propsRec) return undefined;
-  const nested = propsRec["pageProps"];
-  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
-    return nested as WalmartPagePropsShape;
-  }
-
-  return undefined;
-}
-
-function isWalmartProductsEnvelope(data: unknown): data is WalmartProductsResponse {
-  const r = asRecord(data);
-  if (!r) return false;
-  return "props" in r;
-}
-
-const WRAPPER_KEYS = ["data", "result", "body", "payload", "response", "_data"] as const;
-
-/** RapidAPI suele envolver el JSON (__NEXT_DATA__ o Axesso simplificado). */
-function collectPeekRoots(data: unknown, maxRoots = 12): unknown[] {
-  const out: unknown[] = [];
-  const seen = new Set<unknown>();
-  function push(v: unknown) {
-    if (v === null || v === undefined) return;
-    if (seen.has(v)) return;
-    seen.add(v);
-    out.push(v);
-    if (out.length >= maxRoots) return;
-  }
-
-  push(data);
-  let i = 0;
-  while (i < out.length && out.length < maxRoots) {
-    const cur = out[i++];
-    const rec = asRecord(cur);
-    if (!rec) continue;
-    for (const k of WRAPPER_KEYS) {
-      if (out.length >= maxRoots) break;
-      const inner = rec[k];
-      if (inner && typeof inner === "object") push(inner);
+function unwrapStringJson(payload: unknown): unknown {
+  let cur = payload;
+  for (let i = 0; i < 5; i++) {
+    if (typeof cur !== "string") break;
+    const t = cur.trim();
+    if (!((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]")))) break;
+    try {
+      cur = JSON.parse(t) as unknown;
+    } catch {
+      break;
     }
   }
+  return cur;
+}
 
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+function stripNestedListing(row: Record<string, unknown>): Record<string, unknown> {
+  if (typeof row.usItemId === "string" || typeof row.usItemId === "number") return row;
+  if (typeof row.itemId === "string" || typeof row.itemId === "number") return row;
+  if (typeof row.canonicalUrl === "string" && row.canonicalUrl.includes("/ip/")) return row;
+  const innerKeys = ["item", "product", "featuredProduct", "trackingData", "value"] as const;
+  for (const k of innerKeys) {
+    const inner = row[k];
+    if (isPlainObject(inner)) return inner;
+  }
+  return row;
+}
+
+function readTitle(o: Record<string, unknown>): string {
+  return (
+    (typeof o.name === "string" && o.name.trim()) ||
+    (typeof o.title === "string" && o.title.trim()) ||
+    (typeof o.productName === "string" && o.productName.trim()) ||
+    (typeof o.productTitle === "string" && o.productTitle.trim()) ||
+    ""
+  );
+}
+
+/** Id de artículo Walmart (no el id genérico de chips de marca / facetas). */
+function validWalmartItemId(v: unknown): boolean {
+  if (typeof v === "number" && Number.isFinite(v) && v >= 100_000) return true;
+  if (typeof v !== "string") return false;
+  const t = v.trim();
+  return /^\d{5,14}$/.test(t);
+}
+
+function hasProductIdentity(o: Record<string, unknown>): boolean {
+  if (typeof o.canonicalUrl === "string" && o.canonicalUrl.includes("/ip/")) return true;
+  if (validWalmartItemId(o.usItemId) || validWalmartItemId(o.itemId) || validWalmartItemId(o.productId)) {
+    return true;
+  }
+  return false;
+}
+
+function hasProductMediaOrOffer(o: Record<string, unknown>): boolean {
+  const img = typeof o.image === "string" ? o.image : "";
+  if (img.startsWith("http")) return true;
+  const ii = o.imageInfo;
+  if (isPlainObject(ii) && typeof ii.thumbnailUrl === "string" && ii.thumbnailUrl.startsWith("http")) {
+    return true;
+  }
+  if (typeof o.offerId === "string" && o.offerId.length > 10) return true;
+  return false;
+}
+
+/**
+ * Fila de producto real en resultados (no chips de marca como "Apple", "Sony").
+ * Requiere URL /ip/, id numérico largo, o imagen+oferta con título descriptivo.
+ */
+function isWalmartProductRow(r: Record<string, unknown>): boolean {
+  const o = stripNestedListing(r);
+  const title = readTitle(o);
+  if (title.length < 3) return false;
+
+  if (hasProductIdentity(o)) return true;
+
+  if (hasProductMediaOrOffer(o) && title.length >= 14) return true;
+
+  return false;
+}
+
+function pickItemsFromStacks(stacks: unknown): WalmartApiProduct[] {
+  if (!Array.isArray(stacks) || stacks.length === 0) return [];
+  const out: WalmartApiProduct[] = [];
+  for (const st of stacks) {
+    if (!isPlainObject(st)) continue;
+    const rawItems = st["items"] ?? st["products"] ?? st["records"];
+    if (!Array.isArray(rawItems)) continue;
+    for (const el of rawItems) {
+      if (!isPlainObject(el)) continue;
+      const row = stripNestedListing(el);
+      if (isWalmartProductRow(row)) out.push(row as WalmartApiProduct);
+    }
+  }
   return out;
 }
 
-function isProductLikeObject(v: unknown): boolean {
-  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
-  const r = v as Record<string, unknown>;
-  const nameOk =
-    (typeof r.name === "string" && r.name.trim().length > 0) ||
-    (typeof r.title === "string" && r.title.trim().length > 0);
-  const idOk =
-    r.usItemId !== undefined ||
-    r.itemId !== undefined ||
-    (r.id !== undefined && String(r.id).trim().length > 0 && String(r.id) !== "[object Object]");
-  return Boolean(nameOk && idOk);
-}
+function tryNextDataPaths(root: unknown): WalmartApiProduct[] {
+  if (!isPlainObject(root)) return [];
 
-function coerceProductArray(candidate: unknown): WalmartApiProduct[] {
-  if (!Array.isArray(candidate) || candidate.length === 0) return [];
-  const objects = candidate.filter((x) => x !== null && typeof x === "object" && !Array.isArray(x));
-  if (objects.length === 0) return [];
-  const like = objects.filter(isProductLikeObject);
-  if (like.length === 0) return [];
-  if (like.length / objects.length >= 0.35) return like as WalmartApiProduct[];
-  return [];
-}
+  let pageProps: unknown = root["pageProps"];
+  const propsOuter = root["props"];
+  if (!pageProps && isPlainObject(propsOuter)) pageProps = propsOuter["pageProps"];
 
-function stacksToItemsFlat(stacks: unknown): WalmartApiProduct[] {
-  if (!Array.isArray(stacks) || stacks.length === 0) return [];
-  const merged: WalmartApiProduct[] = [];
-  for (const stack of stacks) {
-    if (!stack || typeof stack !== "object" || Array.isArray(stack)) continue;
-    const items = (stack as { items?: unknown }).items;
-    const arr = coerceProductArray(items);
-    for (const it of arr) merged.push(it);
+  if (!pageProps || !isPlainObject(pageProps)) return [];
+
+  const initial = pageProps["initialData"] ?? root["initialData"];
+  if (!isPlainObject(initial)) return [];
+
+  const sr =
+    initial["searchResult"] ?? initial["catalog"] ?? initial["search"] ?? root["searchResult"];
+  if (!isPlainObject(sr)) return [];
+
+  const stacks =
+    sr["itemStacks"] ?? sr["stacks"] ?? sr["layouts"] ?? sr["results"] ?? sr["items"];
+  if (Array.isArray(stacks)) {
+    const fromStacks = pickItemsFromStacks(stacks);
+    if (fromStacks.length > 0) return fromStacks;
+    const maybeFlat = pickFromArrayBestEffort(stacks);
+    if (maybeFlat.length > 0) return maybeFlat;
   }
-  return merged;
-}
 
-function extractFromRoots(roots: readonly unknown[]): WalmartApiProduct[] {
-  for (const root of roots) {
-    let pageProps: WalmartPagePropsShape | undefined;
-
-    if (isWalmartProductsEnvelope(root)) {
-      pageProps = root.props?.pageProps;
-    } else {
-      pageProps = readPageProps(root);
-    }
-
-    let stacks: unknown = pageProps?.initialData?.searchResult?.itemStacks;
-    if (!Array.isArray(stacks) || stacks.length === 0) {
-      const r = asRecord(root);
-      const initial = r?.initialData ?? r?.["initial_data"];
-      if (initial && typeof initial === "object" && !Array.isArray(initial)) {
-        const sr = (initial as Record<string, unknown>)["searchResult"];
-        stacks =
-          sr && typeof sr === "object" && !Array.isArray(sr)
-            ? (sr as Record<string, unknown>)["itemStacks"]
-            : undefined;
-      }
-    }
-
-    if (Array.isArray(stacks) && stacks.length > 0) {
-      const fromStacks = stacksToItemsFlat(stacks);
-      if (fromStacks.length > 0) return fromStacks;
-    }
-
-    const rec = asRecord(root);
-    if (rec) {
-      const srFlat = rec["searchResult"];
-      if (srFlat && typeof srFlat === "object" && !Array.isArray(srFlat)) {
-        const nestedStacks = (srFlat as Record<string, unknown>)["itemStacks"];
-        const fromNested = stacksToItemsFlat(nestedStacks);
-        if (fromNested.length > 0) return fromNested;
-      }
-
-      for (const k of ["products", "items", "searchItems", "searchResults"]) {
-        const fromKey = coerceProductArray(rec[k]);
-        if (fromKey.length > 0) return fromKey;
-      }
-    }
-  }
+  const flat = sr["items"] ?? sr["products"];
+  if (Array.isArray(flat)) return pickFromArrayBestEffort(flat);
 
   return [];
 }
 
-function dfsBestProductLikeArray(node: unknown, depth = 0): WalmartApiProduct[] {
-  if (depth > 16) return [];
+function pickFromArrayBestEffort(arr: unknown[]): WalmartApiProduct[] {
+  const objs = arr.filter(isPlainObject);
+  const hits = objs.filter((o) => isWalmartProductRow(stripNestedListing(o)));
+  return hits as WalmartApiProduct[];
+}
 
-  if (Array.isArray(node)) {
-    const coerced = coerceProductArray(node);
-    if (coerced.length > 0) return coerced;
-    let best: WalmartApiProduct[] = [];
-    for (const el of node) {
-      const got = dfsBestProductLikeArray(el, depth + 1);
-      if (got.length > best.length) best = got;
+function arrayQualityScore(rows: readonly WalmartApiProduct[]): number {
+  let s = 0;
+  for (const raw of rows) {
+    const o = stripNestedListing(raw as Record<string, unknown>);
+    if (hasProductIdentity(o)) s += 100;
+    else if (hasProductMediaOrOffer(o)) s += 15;
+    else s += 1;
+  }
+  return s;
+}
+
+function isStrongerProductList(a: WalmartApiProduct[], b: WalmartApiProduct[]): boolean {
+  if (a.length !== b.length) return a.length > b.length;
+  return arrayQualityScore(a) > arrayQualityScore(b);
+}
+
+function dfsLargestListingArray(root: unknown, depth = 0): WalmartApiProduct[] {
+  if (depth > 26) return [];
+  let best: WalmartApiProduct[] = [];
+
+  if (Array.isArray(root)) {
+    const direct = pickFromArrayBestEffort(root);
+    if (isStrongerProductList(direct, best)) best = direct;
+    for (const el of root) {
+      const sub = dfsLargestListingArray(el, depth + 1);
+      if (isStrongerProductList(sub, best)) best = sub;
     }
     return best;
   }
 
-  if (node && typeof node === "object") {
-    let best: WalmartApiProduct[] = [];
-    for (const v of Object.values(node as Record<string, unknown>)) {
-      const got = dfsBestProductLikeArray(v, depth + 1);
-      if (got.length > best.length) best = got;
+  if (isPlainObject(root)) {
+    for (const v of Object.values(root)) {
+      const sub = dfsLargestListingArray(v, depth + 1);
+      if (isStrongerProductList(sub, best)) best = sub;
     }
     return best;
   }
 
+  return best;
+}
+
+function tryRootShortcuts(root: unknown): WalmartApiProduct[] {
+  if (!isPlainObject(root)) return [];
+  /** `products` a menudo son facetas/marcas — al final si existen claves típicas de listado */
+  for (const k of ["searchItems", "searchResults", "items", "results", "products"]) {
+    const v = root[k];
+    if (!Array.isArray(v)) continue;
+    const got = pickFromArrayBestEffort(v);
+    if (got.length > 0) return got;
+  }
   return [];
 }
 
-export function extractWalmartItemsFromPayload(data: unknown): WalmartApiProduct[] {
+function tryMergedSingleListing(root: unknown): WalmartApiProduct[] {
+  if (!isPlainObject(root)) return [];
+  const hasKw = typeof root.keyword === "string" || typeof root.searchKeyword === "string";
+  const r = stripNestedListing(root);
+  if (hasKw && isWalmartProductRow(r)) return [r as WalmartApiProduct];
+  return [];
+}
+
+/** Intenta obtener filas tipo listado RapidAPI/Walmart desde cualquier envoltorio. */
+export function extractWalmartItemsFromPayload(payload: unknown): WalmartApiProduct[] {
+  const data = unwrapStringJson(payload);
+
+  let out = tryMergedSingleListing(data);
+  if (out.length > 0) return out;
+
   if (Array.isArray(data)) {
-    const direct = coerceProductArray(data);
-    if (direct.length > 0) return direct;
+    out = pickFromArrayBestEffort(data);
+    if (out.length > 0) return out;
+    return dfsLargestListingArray(data);
   }
 
-  const roots = collectPeekRoots(data);
-  const fromStructures = extractFromRoots(roots);
-  if (fromStructures.length > 0) return fromStructures;
+  out = tryNextDataPaths(data);
+  if (out.length > 0) return out;
 
-  return dfsBestProductLikeArray(data);
+  out = tryRootShortcuts(data);
+  if (out.length > 0) return out;
+
+  return dfsLargestListingArray(data);
 }

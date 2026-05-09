@@ -115,7 +115,12 @@ export function ProductInfoPanel({
 
         <div className="flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-neutral-200/70 bg-white/70 px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900/35">
           <Typography variant="label">Precio</Typography>
-          <ProductPrice amount={detail.price} currency={detail.currency} size="lg" />
+          <ProductPrice
+            amount={detail.price}
+            currency={detail.currency}
+            size="lg"
+            unresolved={detail.priceUnresolved === true}
+          />
         </div>
 
         {detail.variants.length > 0 ? (

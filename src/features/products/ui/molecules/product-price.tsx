@@ -8,6 +8,8 @@ export type ProductPriceProps = {
   locale?: string;
   size?: "sm" | "md" | "lg";
   className?: string;
+  /** Sin precio fiable en el payload de la API */
+  unresolved?: boolean;
 };
 
 export function ProductPrice({
@@ -16,8 +18,9 @@ export function ProductPrice({
   locale = "es-MX",
   size = "md",
   className,
+  unresolved = false,
 }: ProductPriceProps) {
-  const label = formatMoney(amount, locale, currency);
+  const label = unresolved ? "No disponible" : formatMoney(amount, locale, currency);
   return (
     <Typography
       as="p"
@@ -29,7 +32,7 @@ export function ProductPrice({
         size === "sm" && "text-base md:text-lg",
         className
       )}
-      aria-label={`Precio ${label}`}
+      aria-label={unresolved ? "Precio no disponible" : `Precio ${label}`}
     >
       {label}
     </Typography>

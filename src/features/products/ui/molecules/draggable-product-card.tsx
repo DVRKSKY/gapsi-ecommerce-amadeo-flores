@@ -9,10 +9,11 @@ import { cn } from "@/shared/utils/cn";
 
 export type DraggableProductCardProps = {
   product: ShopProductDisplay;
+  preserveCatalogSearch?: string;
   className?: string;
 };
 
-export function DraggableProductCard({ product, className }: DraggableProductCardProps) {
+export function DraggableProductCard({ product, preserveCatalogSearch, className }: DraggableProductCardProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const dragSurfaceRef = useRef<HTMLDivElement>(null);
 
@@ -33,6 +34,7 @@ export function DraggableProductCard({ product, className }: DraggableProductCar
     >
       <ProductCard
         product={product}
+        preserveCatalogSearch={preserveCatalogSearch}
         dragLayout
         dragSurfaceRef={dragSurfaceRef}
         className="h-full"

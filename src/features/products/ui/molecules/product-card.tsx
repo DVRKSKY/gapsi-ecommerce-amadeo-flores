@@ -25,6 +25,10 @@ export type ProductCardProps =
       dragSurfaceRef: RefObject<HTMLDivElement | null>;
     };
 
+/** Solo la imagen: sin arrastre nativo ni captura del puntero; el <Link> del padre sigue recibiendo clics */
+const IMG_HUSH =
+  "select-none [-webkit-user-drag:none] [&_img]:pointer-events-none [&_img]:select-none [&_img]:[-webkit-user-drag:none]";
+
 const ARTICLE_SHELL = cn(
   "group flex flex-col overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm ring-neutral-900/5 ring-inset transition-[box-shadow,border-color]",
   "dark:border-neutral-800/80 dark:bg-neutral-950 dark:ring-white/5",
@@ -35,10 +39,14 @@ export function ProductCard(props: ProductCardProps) {
   const { product, className, preserveCatalogSearch } = props;
   const href = productDetailPath(product.id, preserveCatalogSearch);
   const subtitle = product.subtitle?.trim();
-  const priceLabel = formatMoney(product.price, "en-US", product.currency ?? "USD");
+  const priceLabel =
+    product.priceUnresolved === true
+      ? "No disponible"
+      : formatMoney(product.price, "en-US", product.currency ?? "USD");
 
   const sharedImageWrap = cn(
     "relative block aspect-[16/10] w-full overflow-hidden bg-neutral-100 outline-offset-2",
+    IMG_HUSH,
     dragLayout ? "" : "focus-visible:outline-2 focus-visible:outline-neutral-900 dark:focus-visible:outline-white",
     "dark:bg-neutral-900",
   );
@@ -51,14 +59,14 @@ export function ProductCard(props: ProductCardProps) {
           alt={product.name}
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
-          className="bg-neutral-50 object-contain p-6 dark:bg-neutral-900"
+          className="pointer-events-none select-none bg-neutral-50 object-contain p-6 [-webkit-user-drag:none] dark:bg-neutral-900"
           priority={false}
           draggable={false}
         />
       ) : (
         <span
           aria-hidden
-          className="block size-full bg-gradient-to-br from-neutral-200 via-white to-neutral-200/40 dark:from-neutral-800 dark:via-neutral-950 dark:to-neutral-900"
+          className="block size-full select-none bg-gradient-to-br from-neutral-200 via-white to-neutral-200/40 dark:from-neutral-800 dark:via-neutral-950 dark:to-neutral-900"
         />
       )}
       {product.badge ? (

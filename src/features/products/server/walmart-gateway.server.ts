@@ -91,7 +91,23 @@ async function readAxessoJson(creds: WalmartCredentials, upstream: string): Prom
   }
 
   try {
-    return text.length > 0 ? (JSON.parse(text) as unknown) : null;
+    if (text.length === 0) return null;
+    let parsed: unknown = JSON.parse(text);
+    for (let i = 0; i < 4; i++) {
+      if (typeof parsed !== "string") break;
+      const t = parsed.trim();
+      if (
+        !((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]")))
+      ) {
+        break;
+      }
+      try {
+        parsed = JSON.parse(t) as unknown;
+      } catch {
+        break;
+      }
+    }
+    return parsed;
   } catch {
     throw new LookupParseError();
   }

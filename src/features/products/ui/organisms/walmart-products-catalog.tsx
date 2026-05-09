@@ -9,7 +9,7 @@ import { SUGGESTED_PRODUCT_QUERIES } from "../../constants/search-ui";
 import { previewToShopProductDisplay } from "../../factories/walmart-product.factory";
 import { useProductsQuery } from "../../hooks/use-products-query";
 import type { ShopProductDisplay } from "../../types";
-import { ProductsGrid } from "./products-grid";
+import { DraggableProductsGrid } from "./draggable-products-grid";
 import { ProductsGridSkeleton } from "./products-grid-skeleton";
 import { cn } from "@/shared/utils/cn";
 
@@ -157,7 +157,7 @@ export function WalmartProductsCatalog({
               Actualizando…
             </Typography>
           ) : null}
-          <ProductsGrid products={products} preserveCatalogSearch={searchTerm} />
+          <DraggableProductsGrid products={products} preserveCatalogSearch={searchTerm} />
         </div>
       ) : null}
     </section>

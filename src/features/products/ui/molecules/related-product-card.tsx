@@ -57,7 +57,12 @@ export function RelatedProductCard({
             {product.name}
           </Typography>
         </Link>
-        <ProductPrice amount={product.price} currency={product.currency} size="sm" />
+        <ProductPrice
+          amount={product.price}
+          currency={product.currency}
+          size="sm"
+          unresolved={product.priceUnresolved === true}
+        />
         <Link
           href={href}
           prefetch={false}
