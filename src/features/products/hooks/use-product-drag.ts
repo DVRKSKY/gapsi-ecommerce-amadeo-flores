@@ -5,22 +5,25 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
 import { useCartStore } from "@/features/cart";
 import type { ShopProductDisplay } from "@/features/products/types";
 import { isPointerOverDropZone } from "@/features/products/lib/pointer-hit";
+import { getPointerDragAllowedSnapshot } from "@/shared/hooks/use-pointer-drag-allowed";
 
 export type UseProductDragArgs = {
   product: ShopProductDisplay;
   targetRef: RefObject<HTMLElement | null>;
   triggerRef: RefObject<HTMLElement | null>;
+  enabled?: boolean;
 };
 
 const SNAP_HOME_MS = 380;
 
-export function useProductDrag({ product, targetRef, triggerRef }: UseProductDragArgs) {
+export function useProductDrag({ product, targetRef, triggerRef, enabled = true }: UseProductDragArgs) {
   const tearSessionRef = useRef<(() => void) | null>(null);
 
   useLayoutEffect(() => {
     const target = targetRef.current;
     const trigger = triggerRef.current;
     if (!target || !trigger) return;
+    if (!(enabled && getPointerDragAllowedSnapshot())) return;
 
     const workspace = document.getElementById("tienda-workspace");
     let droppedIntoCart = false;
@@ -70,6 +73,9 @@ export function useProductDrag({ product, targetRef, triggerRef }: UseProductDra
           if (over) {
             droppedIntoCart = true;
             st.addProduct(product);
+            requestAnimationFrame(() => {
+              draggable.reset();
+            });
           } else {
             snapTimer = setTimeout(() => {
               snapTimer = undefined;
@@ -100,13 +106,11 @@ export function useProductDrag({ product, targetRef, triggerRef }: UseProductDra
       },
 
       onSettle: () => {
-        if (!droppedIntoCart) {
-          if (snapTimer) {
-            clearTimeout(snapTimer);
-            snapTimer = undefined;
-          }
-          draggable.reset();
+        if (snapTimer) {
+          clearTimeout(snapTimer);
+          snapTimer = undefined;
         }
+        draggable.reset();
       },
     });
 
@@ -116,5 +120,5 @@ export function useProductDrag({ product, targetRef, triggerRef }: UseProductDra
       tearSessionRef.current = null;
       draggable.revert();
     };
-  }, [product, targetRef, triggerRef]);
+  }, [product, targetRef, triggerRef, enabled]);
 }

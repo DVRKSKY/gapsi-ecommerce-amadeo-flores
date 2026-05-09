@@ -11,10 +11,14 @@ type CartUi = {
 type CartStoreState = {
   lines: CartLineDisplay[];
   dropZoneEl: HTMLElement | null;
+  /** En vista estrecha: drawer lateral; en escritorio grande el panel está siempre visible */
+  mobileDrawerOpen: boolean;
   ui: CartUi;
   registerDropZone: (el: HTMLElement | null) => void;
   setDraggingProductId: (productId: string | null) => void;
   setDropZoneHovered: (hovered: boolean) => void;
+  setMobileDrawerOpen: (open: boolean) => void;
+  toggleMobileDrawerOpen: () => void;
   addProduct: (product: ShopProductDisplay) => void;
   removeLineById: (lineId: string) => void;
 };
@@ -25,6 +29,7 @@ const nextLineId = () =>
 export const useCartStore = create<CartStoreState>((set, get) => ({
   lines: [],
   dropZoneEl: null,
+  mobileDrawerOpen: false,
   ui: { draggingProductId: null, dropZoneHovered: false },
 
   registerDropZone: (dropZoneEl) => set({ dropZoneEl }),
@@ -39,7 +44,17 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
       ui: { ...s.ui, dropZoneHovered },
     })),
 
+  setMobileDrawerOpen: (mobileDrawerOpen) => set({ mobileDrawerOpen }),
+
+  toggleMobileDrawerOpen: () => set((s) => ({ mobileDrawerOpen: !s.mobileDrawerOpen })),
+
   addProduct: (product) => {
+    const bumpDrawerCompact = () => {
+      if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
+        set({ mobileDrawerOpen: true });
+      }
+    };
+
     const { lines } = get();
     if (lines.length >= MAX_CART_LINES) return;
 
@@ -49,6 +64,7 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
       const next = [...lines];
       next[existingIdx] = { ...prev, quantity: prev.quantity + 1 };
       set({ lines: next });
+      bumpDrawerCompact();
       return;
     }
 
@@ -63,6 +79,7 @@ export const useCartStore = create<CartStoreState>((set, get) => ({
     };
 
     set({ lines: [...lines, line] });
+    bumpDrawerCompact();
   },
 
   removeLineById: (lineId) =>

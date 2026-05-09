@@ -2,14 +2,25 @@
 
 Demo de tienda sobre **Next.js** (App Router) y **React** con **TypeScript**.
 
+## Diseño del código
+
+- **Orientado por features**: el dominio está en `src/features/<nombre>/` (servidor, hooks, stores, UI del mismo caso de uso); las rutas viven en `app/` y lo genérico en `src/shared/`.
+- **Atomic design**: átomos y layout base en `src/shared/ui/atoms/` (y layouts compartidos); **moléculas / organismos / plantillas** por feature (por ejemplo productos/carrito).
+- **PWA ligera**: `app/manifest.ts` expone instalación **`display: "standalone"`**, iconos y métadatos; el layout enlaza `/manifest.webmanifest`. No hay service worker offline en este repo.
+
+## Comportamiento móvil
+
+- Pantallas **debajo del breakpoint `lg`**: el carrito es un **cajón** (cerrado por defecto); se abre/cierra desde el botón **Carrito** del encabezado, el hueco detrás cierra el panel y Esc también. Al **añadir** un producto (botón «Añadir») el cajón se abre solo en ese viewport.
+- **Drag al carrito** solo si hay **puntero fino** y **`min-width: 1024px`**; en táctiles o vista estrecha las tarjetas son estáticas (sin anime.js draggable).
+
 ## Stack
 
 | Área | Tecnología |
 |------|------------|
 | UI | React 19, **Tailwind CSS** 4 |
-| Estado cliente | **Zustand** (carrito, flags de drag/drop) |
+| Estado cliente | **Zustand** (carrito, drawer móvil, flags de drag/drop) |
 | Datos remotos | **TanStack React Query** (caché, estados async) |
-| Arrastrar al carrito | **anime.js** `createDraggable` + zona de drop (sin `@dnd-kit` ni react-dnd) |
+| Arrastrar al carrito (solo escritorio) | **anime.js** `createDraggable` + zona de drop |
 
 ## Scripts
 

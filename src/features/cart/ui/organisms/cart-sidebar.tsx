@@ -1,8 +1,8 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback } from "react";
-import { useCartStore } from "@/features/cart/stores/cart-store";
+import { useCallback, useEffect } from "react";
+import { useCartStore } from "@/features/cart";
 import { Badge } from "@/shared/ui/atoms/badge";
 import { Button } from "@/shared/ui/atoms/button";
 import { Typography } from "@/shared/ui/atoms/typography";
@@ -19,6 +19,8 @@ export type CartSidebarProps = {
 export function CartSidebar({ headerOffsetPx, currency = "MXN", className }: CartSidebarProps) {
   const lines = useCartStore((s) => s.lines);
   const registerDropZone = useCartStore((s) => s.registerDropZone);
+  const mobileDrawerOpen = useCartStore((s) => s.mobileDrawerOpen);
+  const setMobileDrawerOpen = useCartStore((s) => s.setMobileDrawerOpen);
   const dropHovered = useCartStore((s) => s.ui.dropZoneHovered);
   const draggingId = useCartStore((s) => s.ui.draggingProductId);
 
@@ -28,6 +30,17 @@ export function CartSidebar({ headerOffsetPx, currency = "MXN", className }: Car
     },
     [registerDropZone],
   );
+
+  useEffect(() => {
+    if (!mobileDrawerOpen) return;
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMobileDrawerOpen(false);
+    }
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileDrawerOpen, setMobileDrawerOpen]);
 
   const quantity = lines.reduce((acc, line) => acc + line.quantity, 0);
   const amount = lines.reduce((acc, line) => acc + line.price * line.quantity, 0);
@@ -45,14 +58,28 @@ export function CartSidebar({ headerOffsetPx, currency = "MXN", className }: Car
   };
 
   return (
-    <aside
+    <>
+      <div
+        role="presentation"
+        aria-hidden={!mobileDrawerOpen}
+        className={cn(
+          "fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 lg:hidden",
+          mobileDrawerOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
+        )}
+        onClick={() => setMobileDrawerOpen(false)}
+      />
+
+      <aside
         id="panel-carrito"
         ref={attachDropZone}
         tabIndex={-1}
         aria-label="Carrito"
         style={asideStyle}
         className={cn(
-          "fixed right-0 z-50 flex w-full max-w-sm min-w-0 translate-x-0 flex-col overflow-hidden border-l border-neutral-200/80 bg-neutral-50 shadow-xl dark:border-neutral-800/80 dark:bg-neutral-950",
+          "fixed right-0 z-50 flex w-full max-w-sm min-w-0 translate-x-0 flex-col overflow-hidden border-l border-neutral-200/80 bg-neutral-50 shadow-xl will-change-transform dark:border-neutral-800/80 dark:bg-neutral-950",
+          "transition-transform duration-300 ease-out",
+          mobileDrawerOpen ? "translate-x-0" : "max-lg:translate-x-full max-lg:pointer-events-none",
+          "lg:pointer-events-auto lg:translate-x-0",
           showDropHint &&
             cn(
               "ring-2 ring-inset ring-amber-400/80 shadow-lg dark:ring-amber-500/70",
@@ -75,11 +102,25 @@ export function CartSidebar({ headerOffsetPx, currency = "MXN", className }: Car
           <Typography variant="title" className="text-lg tracking-tight">
             Carrito
           </Typography>
-          {quantity > 0 ? (
-            <Badge tone="neutral" className="tabular-nums">
-              {quantity}
-            </Badge>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-2">
+            {quantity > 0 ? (
+              <Badge tone="neutral" className="tabular-nums">
+                {quantity}
+              </Badge>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="Cerrar carrito"
+              className="h-9 w-9 shrink-0 rounded-xl p-0 lg:hidden"
+              onClick={() => setMobileDrawerOpen(false)}
+            >
+              <span className="text-lg leading-none" aria-hidden>
+                ×
+              </span>
+            </Button>
+          </div>
         </div>
 
         <div className="relative z-[2] flex min-h-0 flex-1 flex-col">
@@ -113,6 +154,7 @@ export function CartSidebar({ headerOffsetPx, currency = "MXN", className }: Car
             </Button>
           </div>
         </div>
-    </aside>
+      </aside>
+    </>
   );
 }

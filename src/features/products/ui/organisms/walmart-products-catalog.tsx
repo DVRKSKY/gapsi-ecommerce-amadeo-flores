@@ -1,16 +1,19 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { HttpError } from "@/shared/api/errors";
+import { useIntersectionObserver } from "@/shared/hooks/use-intersection-observer";
 import { routes } from "@/shared/constants/routes";
+import { Spinner } from "@/shared/ui/atoms/spinner";
 import { Typography } from "@/shared/ui/atoms/typography";
 import { SUGGESTED_PRODUCT_QUERIES } from "../../constants/search-ui";
 import { previewToShopProductDisplay } from "../../factories/walmart-product.factory";
-import { useProductsQuery } from "../../hooks/use-products-query";
+import { useInfiniteProductsQuery } from "../../hooks/use-infinite-products-query";
+import type { ProductPreview } from "../../models/product-ui.models";
 import type { ShopProductDisplay } from "../../types";
-import { DraggableProductsGrid } from "./draggable-products-grid";
 import { ProductsGridSkeleton } from "./products-grid-skeleton";
+import { VirtualizedDraggableProductsGrid } from "./virtualized-draggable-products-grid";
 import { cn } from "@/shared/utils/cn";
 
 function summarizeError(error: unknown): string {
@@ -21,6 +24,20 @@ function summarizeError(error: unknown): string {
   }
   if (error instanceof Error && error.message) return error.message;
   return "No se pudo completar la búsqueda. Intentá de nuevo.";
+}
+
+function dedupeFlattenPages(pages: { products: ProductPreview[] }[]): ShopProductDisplay[] {
+  const seen = new Set<string>();
+  const out: ShopProductDisplay[] = [];
+  for (const pg of pages) {
+    for (const pv of pg.products) {
+      const sd = previewToShopProductDisplay(pv);
+      if (seen.has(sd.id)) continue;
+      seen.add(sd.id);
+      out.push(sd);
+    }
+  }
+  return out;
 }
 
 export type WalmartProductsCatalogProps = {
@@ -49,17 +66,50 @@ export function WalmartProductsCatalog({
     router.replace(routes.catalogWithSearch(term.trim()));
   }
 
-  const { data, isPending, isFetching, isError, error, refetch, fetchStatus } = useProductsQuery({
+  const {
+    data,
+    isPending,
+    isFetching,
+    isFetchingNextPage,
+    isError,
+    error,
+    refetch,
+    fetchStatus,
+    fetchNextPage,
+    hasNextPage,
+  } = useInfiniteProductsQuery({
     search: searchTerm,
-    page: 1,
     enabled: searchTerm.length > 0,
   });
 
-  const products: ShopProductDisplay[] = data?.products.map(previewToShopProductDisplay) ?? [];
+  const flatProducts = useMemo(() => dedupeFlattenPages(data?.pages ?? []), [data]);
+
+  const [scrollRoot, setScrollRoot] = useState<HTMLElement | null>(null);
+
+  const loadMoreNearEnd = useCallback(() => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    void fetchNextPage();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  const { ref: observeSentinelTarget, isIntersecting } = useIntersectionObserver({
+    root: scrollRoot ?? undefined,
+    rootMargin: "120px",
+    threshold: 0,
+    enabled: Boolean(scrollRoot && hasNextPage && searchTerm.length > 0),
+  });
+
+  useEffect(() => {
+    if (!isIntersecting) return;
+    loadMoreNearEnd();
+  }, [isIntersecting, loadMoreNearEnd, flatProducts.length]);
 
   const showInitialHints = searchTerm.length === 0;
   const showEmptyResult =
-    !isPending && !isError && searchTerm.length > 0 && products.length === 0;
+    !isPending &&
+    !isError &&
+    searchTerm.length > 0 &&
+    flatProducts.length === 0 &&
+    !isFetching;
 
   const defaultDescription =
     "Resultados desde la API (proxy en servidor). Buscá con la barra superior o usá estos atajos.";
@@ -130,9 +180,10 @@ export function WalmartProductsCatalog({
             {summarizeError(error)}
           </Typography>
           <Typography variant="muted" className="mt-2 text-xs">
-            Revisa la pestaña Network por la llamada a <code className="rounded bg-neutral-200/70 px-1 dark:bg-neutral-800">/api/products?search=…</code>
-            y tu <code className="rounded bg-neutral-200/70 px-1 dark:bg-neutral-800">.env.local</code>
-            con RapidAPI.
+            Revisa la pestaña Network por la llamada a{" "}
+            <code className="rounded bg-neutral-200/70 px-1 dark:bg-neutral-800">/api/products?search=…</code>
+            y tu{" "}
+            <code className="rounded bg-neutral-200/70 px-1 dark:bg-neutral-800">.env.local</code> con RapidAPI.
           </Typography>
           <button
             type="button"
@@ -150,14 +201,38 @@ export function WalmartProductsCatalog({
         </Typography>
       ) : null}
 
-      {!isPending && products.length > 0 ? (
-        <div className="space-y-2">
-          {isFetching ? (
+      {!isPending && flatProducts.length > 0 ? (
+        <div className="space-y-4">
+          {isFetching && !isFetchingNextPage ? (
             <Typography variant="muted" className="text-sm">
               Actualizando…
             </Typography>
           ) : null}
-          <DraggableProductsGrid products={products} preserveCatalogSearch={searchTerm} />
+
+          <VirtualizedDraggableProductsGrid
+            products={flatProducts}
+            preserveCatalogSearch={searchTerm}
+            observeSentinelRef={observeSentinelTarget}
+            onOuterScrollMount={setScrollRoot}
+          />
+
+          {isFetchingNextPage ? (
+            <div className="space-y-3 border-t border-neutral-200/80 pt-4 dark:border-neutral-800/80">
+              <div className="flex items-center gap-3 text-neutral-700 dark:text-neutral-300">
+                <Spinner aria-hidden />
+                <Typography variant="subtitle" className="text-sm">
+                  Cargando más resultados…
+                </Typography>
+              </div>
+              <ProductsGridSkeleton count={6} />
+            </div>
+          ) : null}
+
+          {!hasNextPage && !isFetchingNextPage ? (
+            <Typography variant="muted" className="text-center text-sm">
+              Fin del catálogo para esta búsqueda.
+            </Typography>
+          ) : null}
         </div>
       ) : null}
     </section>

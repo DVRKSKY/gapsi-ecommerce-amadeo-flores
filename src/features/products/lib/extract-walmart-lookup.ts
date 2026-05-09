@@ -9,9 +9,19 @@ function coerceIdCandidate(value: unknown): string | null {
 }
 
 function nodeMatches(node: Record<string, unknown>, normalizedTarget: string): boolean {
-  const a = coerceIdCandidate(node.usItemId);
-  const b = coerceIdCandidate(node.itemId);
-  return a === normalizedTarget || b === normalizedTarget;
+  const keys = ["usItemId", "itemId", "id", "productId"] as const;
+  for (const k of keys) {
+    const c = coerceIdCandidate(node[k]);
+    if (c !== null && c === normalizedTarget) return true;
+  }
+  const can = typeof node.canonicalUrl === "string" ? node.canonicalUrl : "";
+  if (can.includes("/ip/")) {
+    const tail = can.match(/\/(\d{5,})\s*$/);
+    if (tail && tail[1] === normalizedTarget) return true;
+    const m = can.match(/\/(\d{5,})\b(?:[/?#]|$)/);
+    if (m && m[1] === normalizedTarget) return true;
+  }
+  return false;
 }
 
 export function dfsFindMatchingWalmartProduct(

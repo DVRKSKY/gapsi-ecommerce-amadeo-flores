@@ -1,8 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Suspense, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { CartSidebar } from "@/features/cart";
+import { useCartStore } from "@/features/cart";
 import { ShopHeader } from "@/features/products";
 import { cn } from "@/shared/utils/cn";
 
@@ -14,8 +16,13 @@ export type StoreShellProps = {
 };
 
 export function StoreShell({ children, className }: StoreShellProps) {
+  const pathname = usePathname();
   const headerRef = useRef<HTMLElement>(null);
   const [headerOffsetPx, setHeaderOffsetPx] = useState(STORE_HEADER_FALLBACK_PX);
+
+  useEffect(() => {
+    useCartStore.getState().setMobileDrawerOpen(false);
+  }, [pathname]);
 
   useLayoutEffect(() => {
     const node = headerRef.current;
@@ -49,7 +56,7 @@ export function StoreShell({ children, className }: StoreShellProps) {
       >
         <main
           id="contenido-tienda"
-          className="relative min-h-0 w-full flex-1 overflow-y-auto md:min-w-0 md:pr-96"
+          className="relative min-h-0 w-full min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden lg:pr-96"
         >
           {children}
         </main>

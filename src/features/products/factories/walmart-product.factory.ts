@@ -177,8 +177,24 @@ export function pickRelatedHints(blob: WalmartApiProduct): string[] {
 
 function idHintFromCanonical(u: string | null): string | null {
   if (!u) return null;
+  const tail = u.match(/\/(\d{5,})\s*$/);
+  if (tail?.[1]) return tail[1];
   const m = u.match(/\/(\d{6,})\b/);
   return m?.[1] ? m[1] : null;
+}
+
+function nameHintFromCanonicalPath(canonical: string | null | undefined): string | null {
+  if (!canonical) return null;
+  const m = canonical.match(/\/ip\/([^/?#]+)/);
+  const raw = m?.[1]?.trim();
+  if (!raw) return null;
+  try {
+    const decoded = decodeURIComponent(raw.replace(/\+/g, " "));
+    const words = decoded.replace(/-/g, " ").replace(/\s+/g, " ").trim();
+    return words.length > 3 ? words : null;
+  } catch {
+    return null;
+  }
 }
 
 function coerceWalmartListingId(blob: WalmartApiProduct | WalmartVariantRaw): string | null {
@@ -212,10 +228,14 @@ export function mapApiVariant(raw: WalmartVariantRaw): ProductVariant | null {
 export function mapApiProductToPreview(api: WalmartApiProduct): ProductPreview | null {
   const id = coerceWalmartListingId(api);
   const recProd = api as Record<string, unknown>;
+  const canonicalEarly = coerceString(api.canonicalUrl);
   const name =
     coerceString(api.name) ??
     coerceString(recProd["title"]) ??
-    coerceString(recProd["productName"]);
+    coerceString(recProd["productName"]) ??
+    coerceString(recProd["productTitle"]) ??
+    coerceString(recProd["itemName"]) ??
+    nameHintFromCanonicalPath(canonicalEarly);
   if (!id || !name) return null;
 
   let priceUnresolved = false;

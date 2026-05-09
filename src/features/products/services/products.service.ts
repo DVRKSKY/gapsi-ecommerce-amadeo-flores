@@ -11,6 +11,7 @@ export type ProductsSearchResult = {
   products: ProductPreview[];
   search: string;
   page: number;
+  hasMore: boolean;
 };
 
 type ProductsSearchApiSuccessBody = ProductsSearchResult;
@@ -41,7 +42,7 @@ export async function getProducts(params: ProductsSearchParams): Promise<Product
 export async function searchProducts(term: string, page = 1): Promise<ProductsSearchResult> {
   const search = term.trim();
   if (!search.length) {
-    return { products: [], search: "", page };
+    return { products: [], search: "", page, hasMore: false };
   }
   return getProducts({ search, page });
 }

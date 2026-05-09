@@ -7,10 +7,19 @@ import {
   loadRelatedPreviewsParallel,
 } from "@/features/products/server/walmart-gateway.server";
 import { ProductDetailTemplate } from "@/features/products/ui/templates/product-detail-template";
+import { APP_NAME } from "@/shared/constants/app";
 import { routes } from "@/shared/constants/routes";
+import { SEO_KEYWORDS } from "@/shared/constants/seo";
+import { getSiteOrigin } from "@/shared/lib/site-url";
 import { StoreShell } from "@/shared/layouts/store-shell";
 
 export const dynamic = "force-dynamic";
+
+function truncateMeta(text: string, max: number): string {
+  const s = text.trim().replace(/\s+/g, " ");
+  if (s.length <= max) return s;
+  return `${s.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -27,10 +36,41 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
     const { detail } = await loadProductLookupDetail(creds, decoded);
     if (!detail) return { title: "Producto" };
 
-    const descSlice = detail.longDescription ?? detail.shortDescription ?? "";
+    const rawDesc = detail.longDescription ?? detail.shortDescription ?? "";
+    const description = rawDesc.length > 0 ? truncateMeta(rawDesc, 155) : undefined;
+    const origin = getSiteOrigin();
+    const canonicalPath = routes.product(decoded);
+    const canonical = new URL(canonicalPath, origin).href;
+    const imageUrl =
+      detail.gallery[0]?.url ?? detail.image.url ?? detail.image.thumbnailUrl ?? undefined;
+    const keywords = [...SEO_KEYWORDS, detail.name, detail.brandText, detail.categoryText].filter(
+      (k): k is string => typeof k === "string" && k.trim().length > 0,
+    );
+
+    const title = truncateMeta(detail.name, 64);
+
     return {
-      title: `${detail.name} · Gapsi`,
-      description: descSlice.length > 0 ? descSlice.slice(0, 155) : undefined,
+      title,
+      description,
+      keywords,
+      alternates: {
+        canonical: canonicalPath,
+      },
+      openGraph: {
+        type: "website",
+        locale: "es_MX",
+        url: canonical,
+        title: `${title} · ${APP_NAME}`,
+        description,
+        siteName: APP_NAME,
+        ...(imageUrl ? { images: [{ url: imageUrl, alt: detail.name }] } : {}),
+      },
+      twitter: {
+        card: imageUrl ? "summary_large_image" : "summary",
+        title: `${title} · ${APP_NAME}`,
+        description,
+        ...(imageUrl ? { images: [imageUrl] } : {}),
+      },
     };
   } catch {
     return { title: "Producto" };

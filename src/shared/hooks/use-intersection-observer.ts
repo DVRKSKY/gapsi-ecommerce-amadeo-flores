@@ -1,29 +1,34 @@
 "use client";
 
 import type { RefCallback } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-export function useIntersectionObserver(options?: IntersectionObserverInit) {
+export type UseIntersectionObserverOptions = Omit<IntersectionObserverInit, "root"> & {
+  root?: Element | Document | null;
+  enabled?: boolean;
+};
+
+/** IntersectionObserver como patrón Observer: expone estado y ref del nodo observado. */
+export function useIntersectionObserver(options?: UseIntersectionObserverOptions) {
+  const { enabled = true, root, rootMargin, threshold } = options ?? {};
+
   const [target, setTarget] = useState<Element | null>(null);
   const [isIntersecting, setIntersecting] = useState(false);
-  const optionsRef = useRef(options);
 
   useEffect(() => {
-    optionsRef.current = options;
-  }, [options]);
+    if (!enabled || !target) return;
+
+    const obs = new IntersectionObserver(([entry]) => {
+      setIntersecting(Boolean(entry?.isIntersecting));
+    }, { root: root ?? null, rootMargin, threshold: threshold ?? 0 });
+
+    obs.observe(target);
+    return () => obs.disconnect();
+  }, [enabled, target, root, rootMargin, threshold]);
 
   const ref: RefCallback<Element> = useCallback((node) => {
     setTarget((prev) => (prev === node ? prev : node));
   }, []);
-
-  useEffect(() => {
-    if (!target) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      setIntersecting(entry?.isIntersecting ?? false);
-    }, optionsRef.current);
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [target]);
 
   return { ref, isIntersecting };
 }

@@ -13,11 +13,13 @@ import {
 } from "@/features/products/factories/walmart-product.factory";
 import type { WalmartCredentials } from "@/features/products/server/walmart-credentials.server";
 import { walmartAxessoHeaders } from "@/features/products/server/walmart-credentials.server";
+import { PRODUCTS_PAGE_HAS_MORE_THRESHOLD } from "@/features/products/constants/search-ui";
 
 export type LoadedSearchPack = {
   products: ProductPreview[];
   search: string;
   page: number;
+  hasMore: boolean;
 };
 
 export type ProductDetailResolved = {
@@ -129,7 +131,9 @@ export async function loadProductSearchPack(
     if (mapped) previews.push(mapped);
   }
 
-  return { products: previews, search: keyword, page: params.page };
+  const hasMore = previews.length >= PRODUCTS_PAGE_HAS_MORE_THRESHOLD;
+
+  return { products: previews, search: keyword, page: params.page, hasMore };
 }
 
 export async function loadProductLookupDetail(

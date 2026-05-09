@@ -1,20 +1,29 @@
-%% gapsi-ecommerce — vista de capas (Mermaid)
+%% gapsi-ecommerce — capas y UX
 
 flowchart TB
-  subgraph cliente["Cliente (React)"]
-    UI["UI + Tailwind"]
-    Z["Zustand\n(carrito, drag UI)"]
-    RQ["TanStack React Query\n(fetch + caché)"]
-    AJ["anime.js\ncreateDraggable → carrito"]
+  subgraph app["app/ (Next)"]
+    R["rutas / metadata / manifest PWA"]
+    API["Route Handlers"]
   end
 
-  subgraph next["Next.js"]
-    P["Páginas / layouts"]
-    S["Rutas servidor / gateways"]
+  subgraph features["src/features/* (dominio)"]
+    subgraph products["products"]
+      PUI["ui molecules → organisms → templates"]
+      PH["hooks + React Query"]
+      PS["server gateways"]
+    end
+    subgraph cart["cart"]
+      CUI["sidebar / items"]
+      Z["Zustand store"]
+    end
   end
 
-  UI --> Z
-  UI --> RQ
-  UI --> AJ
-  RQ --> S
-  S --> EXT["API / fuente de datos\n(ej. Walmart)"]
+  subgraph shared["src/shared"]
+    A["ui atoms + layouts"]
+    U["utils / constants / SEO"]
+  end
+
+  app --> features
+  features --> shared
+  R --> products
+  PH --> API

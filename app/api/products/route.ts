@@ -16,6 +16,7 @@ type SearchResponseBody = {
   products: ProductPreview[];
   search: string;
   page: number;
+  hasMore: boolean;
 };
 
 type DetailResponseBody = {
@@ -72,7 +73,7 @@ export async function GET(req: Request) {
 
   if (hasItem) {
     const itemId = itemIdRaw!.trim();
-    if (itemId.length > 32 || !/^[0-9A-Za-z-]+$/.test(itemId)) {
+    if (itemId.length > 96 || !/^[0-9A-Za-z_-]+$/.test(itemId)) {
       return NextResponse.json({ error: "itemId inválido." }, { status: 400 });
     }
 
@@ -108,6 +109,7 @@ export async function GET(req: Request) {
       products: pack.products,
       search: pack.search,
       page: pack.page,
+      hasMore: pack.hasMore,
     };
     return NextResponse.json(body);
   } catch (e: unknown) {

@@ -22,7 +22,7 @@ export function SiteFooter({ className }: SiteFooterProps) {
         className,
       )}
     >
-      <ResponsiveContainer className="py-10 text-left md:py-14 md:pr-96">
+      <ResponsiveContainer className="py-10 text-left md:py-14 lg:pr-96">
         <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-14">
           <div className="min-w-0 max-w-xl">
             <Link
