@@ -10,19 +10,26 @@ export type DraggableProductsGridProps = {
   products: ShopProductDisplay[];
   preserveCatalogSearch?: string;
   className?: string;
+  /** Si es true, oculta ítems que ya están en el carrito (secciones compactas). En catálogo paginado conviene false. */
+  omitInCart?: boolean;
 };
 
-export function DraggableProductsGrid({ products, preserveCatalogSearch, className }: DraggableProductsGridProps) {
+export function DraggableProductsGrid({
+  products,
+  preserveCatalogSearch,
+  className,
+  omitInCart = true,
+}: DraggableProductsGridProps) {
   const lines = useCartStore((s) => s.lines);
 
   const excluded = useMemo(() => new Set(lines.map((l) => l.productId)), [lines]);
   const visible = useMemo(
-    () => products.filter((p) => !excluded.has(p.id)),
-    [products, excluded],
+    () => (omitInCart ? products.filter((p) => !excluded.has(p.id)) : products),
+    [products, excluded, omitInCart],
   );
 
   return (
-    <ul className={cn("grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3", className)}>
+    <ul className={cn("grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3", className)}>
       {visible.map((product) => (
         <li key={product.id}>
           <DraggableProductCard

@@ -387,6 +387,37 @@ export function previewToShopProductDisplay(preview: ProductPreview): ShopProduc
   };
 }
 
+/** Construye detalle sólo desde preview de búsqueda (sin segundo GET / lookup). */
+export function previewToProductDetailFromList(preview: ProductPreview): ProductDetail {
+  const rawUrl = preview.image.url?.trim() ?? "";
+  const thumb = preview.image.thumbnailUrl?.trim();
+  const seen = new Set<string>();
+  const ordered: ProductImage[] = [];
+  for (const u of [rawUrl, thumb]) {
+    if (!u || seen.has(u)) continue;
+    seen.add(u);
+    ordered.push({ url: u });
+  }
+
+  const gallery = ordered.length > 0 ? ordered : rawUrl ? [{ url: rawUrl }] : [];
+
+  const canonical = preview.canonicalUrl?.trim() ?? "";
+  const walmartUrl =
+    canonical.length > 0 ? `${WALMART_ORIGIN}${canonical.startsWith("/") ? canonical : `/${canonical}`}` : null;
+
+  const longDesc = preview.shortDescription;
+
+  return {
+    ...preview,
+    longDescription: longDesc,
+    gallery,
+    walmartUrl,
+    brandText: null,
+    categoryText: null,
+    relatedSearchHints: Object.freeze([]),
+  };
+}
+
 export function catalogDetailToShopDisplay(detail: ProductDetail): ShopProductDisplay {
   const thumb = detail.gallery[0]?.url ?? detail.image.url ?? detail.image.thumbnailUrl;
   return {

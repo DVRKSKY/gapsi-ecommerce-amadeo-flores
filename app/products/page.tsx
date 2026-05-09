@@ -10,8 +10,15 @@ import { SEO_DEFAULT_DESCRIPTION } from "@/shared/constants/seo";
 import { DEFAULT_INITIAL_CATALOG_SEARCH } from "@/features/products/constants/search-ui";
 
 type Props = {
-  searchParams?: Promise<{ search?: string }>;
+  searchParams?: Promise<{ search?: string; page?: string }>;
 };
+
+function parseCatalogPageKey(raw: unknown): number {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  if (!/^\d+$/.test(s)) return 1;
+  const n = Number.parseInt(s, 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
 
 function truncateMeta(text: string, max: number): string {
   const s = text.trim();
@@ -62,6 +69,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 export default async function ProductsPage({ searchParams }: Props) {
   const sp = (await searchParams) ?? {};
   const initialSearch = typeof sp.search === "string" ? sp.search.trim() : "";
+  const pageKey = parseCatalogPageKey(sp.page);
 
   if (initialSearch.length === 0) {
     redirect(routes.catalogWithSearch(DEFAULT_INITIAL_CATALOG_SEARCH));
@@ -70,7 +78,7 @@ export default async function ProductsPage({ searchParams }: Props) {
   return (
     <ShopTemplate>
       <Suspense fallback={<ProductsGridSkeleton count={6} />}>
-        <WalmartProductsCatalog key={initialSearch} catalogSearch={initialSearch} />
+        <WalmartProductsCatalog key={`${initialSearch}|${pageKey}`} catalogSearch={initialSearch} />
       </Suspense>
     </ShopTemplate>
   );

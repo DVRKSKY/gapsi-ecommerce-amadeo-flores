@@ -125,10 +125,13 @@ export async function loadProductSearchPack(
 
   const extracted = extractWalmartItemsFromPayload(json ?? null);
   const previews: ProductPreview[] = [];
+  const seenIds = new Set<string>();
 
   for (const item of extracted) {
     const mapped = mapApiProductToPreview(item);
-    if (mapped) previews.push(mapped);
+    if (!mapped || seenIds.has(mapped.id)) continue;
+    seenIds.add(mapped.id);
+    previews.push(mapped);
   }
 
   const hasMore = previews.length >= PRODUCTS_PAGE_HAS_MORE_THRESHOLD;

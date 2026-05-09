@@ -43,7 +43,3 @@ Crea `.env.local` en la raíz con estas claves (sin commitear el archivo):
 | `NEXT_PUBLIC_LINKEDIN_URL` | Enlace público (footer / perfil) |
 
 No subas valores reales al repositorio; rota la clave si se filtró.
-
-## Diagrama de capas
-
-Ver [`architecture.mmd`](./architecture.mmd) (Mermaid).

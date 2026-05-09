@@ -1,19 +1,18 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { HttpError } from "@/shared/api/errors";
-import { useIntersectionObserver } from "@/shared/hooks/use-intersection-observer";
 import { routes } from "@/shared/constants/routes";
-import { Spinner } from "@/shared/ui/atoms/spinner";
+import { Button } from "@/shared/ui/atoms/button";
 import { Typography } from "@/shared/ui/atoms/typography";
 import { SUGGESTED_PRODUCT_QUERIES } from "../../constants/search-ui";
 import { previewToShopProductDisplay } from "../../factories/walmart-product.factory";
-import { useInfiniteProductsQuery } from "../../hooks/use-infinite-products-query";
+import { useProductsQuery } from "../../hooks/use-products-query";
 import type { ProductPreview } from "../../models/product-ui.models";
 import type { ShopProductDisplay } from "../../types";
+import { DraggableProductsGrid } from "./draggable-products-grid";
 import { ProductsGridSkeleton } from "./products-grid-skeleton";
-import { VirtualizedDraggableProductsGrid } from "./virtualized-draggable-products-grid";
 import { cn } from "@/shared/utils/cn";
 
 function summarizeError(error: unknown): string {
@@ -26,16 +25,20 @@ function summarizeError(error: unknown): string {
   return "No se pudo completar la búsqueda. Intentá de nuevo.";
 }
 
-function dedupeFlattenPages(pages: { products: ProductPreview[] }[]): ShopProductDisplay[] {
+function parsePageParam(raw: string | null): number {
+  if (raw === null) return 1;
+  const n = Number.parseInt(raw, 10);
+  if (Number.isNaN(n) || n < 1) return 1;
+  return n;
+}
+
+function dedupeProductPreviews(rows: readonly ProductPreview[]): ProductPreview[] {
   const seen = new Set<string>();
-  const out: ShopProductDisplay[] = [];
-  for (const pg of pages) {
-    for (const pv of pg.products) {
-      const sd = previewToShopProductDisplay(pv);
-      if (seen.has(sd.id)) continue;
-      seen.add(sd.id);
-      out.push(sd);
-    }
+  const out: ProductPreview[] = [];
+  for (const p of rows) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    out.push(p);
   }
   return out;
 }
@@ -60,48 +63,36 @@ export function WalmartProductsCatalog({
     return searchFromUrl.length > 0 ? searchFromUrl : fromServer;
   }, [catalogSearch, searchFromUrl]);
 
-  function applySearch(term: string) {
-    router.replace(routes.catalogWithSearch(term.trim()));
+  const page = parsePageParam(sp.get("page"));
+
+  useEffect(() => {
+    const root = document.getElementById("contenido-tienda");
+    if (root instanceof HTMLElement) root.scrollTo({ top: 0, behavior: "auto" });
+  }, [page, searchTerm]);
+
+  function goToCatalogSearch(term: string) {
+    router.replace(routes.catalogPaged(term.trim(), 1));
   }
 
   const {
     data,
     isPending,
     isFetching,
-    isFetchingNextPage,
+    isPlaceholderData,
     isError,
     error,
     refetch,
     fetchStatus,
-    fetchNextPage,
-    hasNextPage,
-  } = useInfiniteProductsQuery({
+  } = useProductsQuery({
     search: searchTerm,
+    page,
     enabled: searchTerm.length > 0,
   });
 
-  const flatProducts = useMemo(() => dedupeFlattenPages(data?.pages ?? []), [data]);
-
-  const [mainScrollRoot] = useState<HTMLElement | null>(() =>
-    typeof document !== "undefined" ? document.getElementById("contenido-tienda") : null,
-  );
-
-  const loadMoreNearEnd = useCallback(() => {
-    if (!hasNextPage || isFetchingNextPage) return;
-    void fetchNextPage();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
-
-  const { ref: observeSentinelTarget, isIntersecting } = useIntersectionObserver({
-    root: mainScrollRoot ?? undefined,
-    rootMargin: "160px",
-    threshold: 0,
-    enabled: Boolean(mainScrollRoot && hasNextPage && searchTerm.length > 0),
-  });
-
-  useEffect(() => {
-    if (!isIntersecting) return;
-    loadMoreNearEnd();
-  }, [isIntersecting, loadMoreNearEnd, flatProducts.length]);
+  const flatProducts: ShopProductDisplay[] = useMemo(() => {
+    const unique = dedupeProductPreviews(data?.products ?? []);
+    return unique.map((p) => previewToShopProductDisplay(p));
+  }, [data?.products]);
 
   const showInitialHints = searchTerm.length === 0;
   const showEmptyResult =
@@ -113,6 +104,10 @@ export function WalmartProductsCatalog({
 
   const showStuckHint =
     searchTerm.length > 0 && fetchStatus === "idle" && !data && !isPending && !isError;
+
+  const hasMore = Boolean(data?.hasMore);
+  const canPrev = page > 1 && !isFetching;
+  const canNext = hasMore && !isFetching;
 
   return (
     <section className={cn("space-y-6", className)} aria-labelledby="catalogo-walmart-titulo">
@@ -137,7 +132,7 @@ export function WalmartProductsCatalog({
                   ? "border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-950"
                   : "border-neutral-200 bg-white text-neutral-800 hover:border-neutral-400 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:hover:border-neutral-600 dark:hover:bg-neutral-900",
               )}
-              onClick={() => applySearch(q)}
+              onClick={() => goToCatalogSearch(q)}
             >
               {q}
             </button>
@@ -190,39 +185,54 @@ export function WalmartProductsCatalog({
       ) : null}
 
       {!isPending && flatProducts.length > 0 ? (
-        <div className="space-y-4">
-          {isFetching && !isFetchingNextPage ? (
-            <Typography variant="muted" className="text-sm">
-              Actualizando…
-            </Typography>
-          ) : null}
-
-          <VirtualizedDraggableProductsGrid
-            products={flatProducts}
-            preserveCatalogSearch={searchTerm}
-            onNearEnd={loadMoreNearEnd}
-          />
+        <div className="space-y-6">
           <div
-            ref={observeSentinelTarget}
-            aria-hidden
-            className="pointer-events-none h-2 w-full max-w-full shrink-0 opacity-0"
-          />
+            className={cn(
+              "rounded-3xl bg-transparent transition-opacity duration-150",
+              isFetching && isPlaceholderData ? "opacity-[0.72]" : "opacity-100",
+            )}
+            aria-busy={isFetching ? true : undefined}
+          >
+            <DraggableProductsGrid
+              products={flatProducts}
+              preserveCatalogSearch={searchTerm}
+              omitInCart={false}
+            />
+          </div>
 
-          {isFetchingNextPage ? (
-            <div className="space-y-3 border-t border-neutral-200/80 pt-4 dark:border-neutral-800/80">
-              <div className="flex items-center gap-3 text-neutral-700 dark:text-neutral-300">
-                <Spinner aria-hidden />
-                <Typography variant="subtitle" className="text-sm">
-                  Cargando más resultados…
-                </Typography>
-              </div>
-              <ProductsGridSkeleton count={6} />
-            </div>
-          ) : null}
+          <nav
+            className="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200/80 pt-4 dark:border-neutral-800/80"
+            aria-label="Paginación de resultados"
+          >
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!canPrev}
+              onClick={() => router.replace(routes.catalogPaged(searchTerm, page - 1))}
+            >
+              ← Anterior
+            </Button>
+            <Typography variant="subtitle" className="tabular-nums text-sm text-neutral-600 dark:text-neutral-400">
+              Página {page}
+              {isFetching ? (
+                <span className="ml-2 text-xs font-normal text-neutral-400">Actualizando…</span>
+              ) : null}
+            </Typography>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!canNext}
+              onClick={() => router.replace(routes.catalogPaged(searchTerm, page + 1))}
+            >
+              Siguiente →
+            </Button>
+          </nav>
 
-          {!hasNextPage && !isFetchingNextPage ? (
-            <Typography variant="muted" className="text-center text-sm">
-              Fin del catálogo para esta búsqueda.
+          {!hasMore && flatProducts.length > 0 ? (
+            <Typography variant="muted" className="block text-center text-sm">
+              Última página para esta búsqueda.
             </Typography>
           ) : null}
         </div>

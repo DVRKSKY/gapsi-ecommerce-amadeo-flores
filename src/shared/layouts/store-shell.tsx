@@ -56,7 +56,7 @@ export function StoreShell({ children, className }: StoreShellProps) {
       >
         <main
           id="contenido-tienda"
-          className="relative min-h-0 w-full min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden lg:pr-96"
+          className="relative min-h-0 w-full min-w-0 max-w-full flex-1 overflow-y-auto overflow-x-hidden [overflow-anchor:none] lg:pr-96"
         >
           {children}
         </main>

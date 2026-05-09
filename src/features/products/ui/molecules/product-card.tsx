@@ -132,10 +132,16 @@ export function ProductCard(props: ProductCardProps) {
             className={buttonClassName({
               variant: "outline",
               size: "sm",
-              className: "relative z-30 w-full justify-center text-center sm:w-auto",
+              className: "relative z-30 w-full justify-center text-center touch-manipulation sm:w-auto",
             })}
             href={href}
             {...linkPrefetch}
+            onPointerDownCapture={(event) => {
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
           >
             Ver detalle
           </Link>

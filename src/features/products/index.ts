@@ -20,8 +20,6 @@ export type { ProductsSearchParams, ProductsSearchResult } from "./services/prod
 
 export { useProductsQuery } from "./hooks/use-products-query";
 export type { UseProductsQueryArgs } from "./hooks/use-products-query";
-export { useInfiniteProductsQuery } from "./hooks/use-infinite-products-query";
-export type { UseInfiniteProductsQueryArgs } from "./hooks/use-infinite-products-query";
 
 export {
   catalogDetailToShopDisplay,
@@ -51,6 +49,5 @@ export { ProductsGridSkeleton } from "./ui/organisms/products-grid-skeleton";
 export { DraggableProductsGrid } from "./ui/organisms/draggable-products-grid";
 export { ProductsSection } from "./ui/organisms/products-section";
 export { WalmartProductsCatalog } from "./ui/organisms/walmart-products-catalog";
-export { VirtualizedDraggableProductsGrid } from "./ui/organisms/virtualized-draggable-products-grid";
 export { RelatedProductsSection } from "./ui/organisms/related-products-section";
 export { ShopHeader } from "./ui/organisms/shop-header";
