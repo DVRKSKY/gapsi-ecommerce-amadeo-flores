@@ -84,7 +84,9 @@ export function WalmartProductsCatalog({
 
   const flatProducts = useMemo(() => dedupeFlattenPages(data?.pages ?? []), [data]);
 
-  const [scrollRoot, setScrollRoot] = useState<HTMLElement | null>(null);
+  const [mainScrollRoot] = useState<HTMLElement | null>(() =>
+    typeof document !== "undefined" ? document.getElementById("contenido-tienda") : null,
+  );
 
   const loadMoreNearEnd = useCallback(() => {
     if (!hasNextPage || isFetchingNextPage) return;
@@ -92,10 +94,10 @@ export function WalmartProductsCatalog({
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const { ref: observeSentinelTarget, isIntersecting } = useIntersectionObserver({
-    root: scrollRoot ?? undefined,
-    rootMargin: "120px",
+    root: mainScrollRoot ?? undefined,
+    rootMargin: "160px",
     threshold: 0,
-    enabled: Boolean(scrollRoot && hasNextPage && searchTerm.length > 0),
+    enabled: Boolean(mainScrollRoot && hasNextPage && searchTerm.length > 0),
   });
 
   useEffect(() => {
@@ -212,8 +214,12 @@ export function WalmartProductsCatalog({
           <VirtualizedDraggableProductsGrid
             products={flatProducts}
             preserveCatalogSearch={searchTerm}
-            observeSentinelRef={observeSentinelTarget}
-            onOuterScrollMount={setScrollRoot}
+            onNearEnd={loadMoreNearEnd}
+          />
+          <div
+            ref={observeSentinelTarget}
+            aria-hidden
+            className="pointer-events-none h-2 w-full max-w-full shrink-0 opacity-0"
           />
 
           {isFetchingNextPage ? (

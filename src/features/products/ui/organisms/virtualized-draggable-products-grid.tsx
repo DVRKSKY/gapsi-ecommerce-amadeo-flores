@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactElement, ReactNode } from "react";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CellComponentProps } from "react-window";
 import { Grid, useGridRef } from "react-window";
 import {
@@ -58,11 +58,7 @@ function VirtualCatalogCell(props: CellComponentProps<CatalogCellPayload>): Reac
 
   const product = products[idx];
   return (
-    <div
-      {...ariaAttributes}
-      style={innerStyle}
-      className="min-h-0 min-w-0 max-w-full overflow-hidden contain-[paint]"
-    >
+    <div {...ariaAttributes} style={innerStyle} className="min-h-0 min-w-0 max-w-full overflow-hidden">
       <DraggableProductCard
         product={product}
         preserveCatalogSearch={preserveCatalogSearch}
@@ -76,21 +72,24 @@ export type VirtualizedDraggableProductsGridProps = {
   products: readonly ShopProductDisplay[];
   preserveCatalogSearch?: string;
   className?: string;
-  observeSentinelRef: (node: Element | null) => void;
-  onOuterScrollMount?: (el: HTMLElement | null) => void;
+  /** Llamado cuando el usuario se acerca al final visible del grid (scroll interno). */
+  onNearEnd?: () => void;
 };
 
 export function VirtualizedDraggableProductsGrid({
   products,
   preserveCatalogSearch,
   className,
-  observeSentinelRef,
-  onOuterScrollMount,
+  onNearEnd,
 }: VirtualizedDraggableProductsGridProps): ReactNode {
   const measureRef = useRef<HTMLDivElement | null>(null);
   const [dims, setDims] = useState({ w: 0, h: CATALOG_GRID_SCROLL_MIN_H });
   const gridRef = useGridRef(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const onNearEndRef = useRef(onNearEnd);
+
+  useLayoutEffect(() => {
+    onNearEndRef.current = onNearEnd;
+  }, [onNearEnd]);
 
   useLayoutEffect(() => {
     const el = measureRef.current;
@@ -120,34 +119,17 @@ export function VirtualizedDraggableProductsGrid({
     [products, columnCount, preserveCatalogSearch],
   );
 
-  useLayoutEffect(() => {
-    const outer = gridRef.current?.element ?? null;
-    if (!(outer instanceof HTMLElement)) {
-      onOuterScrollMount?.(null);
-      observeSentinelRef(null);
-      return;
-    }
-
-    onOuterScrollMount?.(outer);
-
-    let sentinel = sentinelRef.current;
-    if (!(sentinel instanceof HTMLDivElement)) {
-      sentinel = document.createElement("div");
-      sentinel.setAttribute("data-catalog-scroll-sentinel", "");
-      sentinel.setAttribute("aria-hidden", "true");
-      sentinel.className = "pointer-events-none h-10 w-full shrink-0 opacity-0";
-      sentinelRef.current = sentinel;
-      outer.appendChild(sentinel);
-    } else if (sentinel.parentElement !== outer) {
-      outer.appendChild(sentinel);
-    }
-
-    observeSentinelRef(sentinel);
-
-    return () => {
-      observeSentinelRef(null);
-    };
-  }, [dims.w, dims.h, gridRef, observeSentinelRef, onOuterScrollMount, products.length, rowCount]);
+  const handleCellsRendered = useCallback(
+    (visible: { rowStopIndex: number }) => {
+      if (!onNearEndRef.current) return;
+      if (products.length === 0) return;
+      const prefetchFrom = Math.max(0, rowCount - 2);
+      if (visible.rowStopIndex >= prefetchFrom) {
+        onNearEndRef.current();
+      }
+    },
+    [products.length, rowCount],
+  );
 
   if (products.length === 0) return null;
 
@@ -169,7 +151,7 @@ export function VirtualizedDraggableProductsGrid({
           columnWidth={columnWidth}
           rowCount={rowCount}
           rowHeight={CATALOG_VIRTUAL_ROW_HEIGHT}
-          overscanCount={2}
+          overscanCount={4}
           defaultHeight={dims.h}
           defaultWidth={dims.w}
           className="max-w-full overflow-x-hidden overscroll-x-contain"
@@ -178,6 +160,7 @@ export function VirtualizedDraggableProductsGrid({
             width: dims.w,
             maxWidth: "100%",
           }}
+          onCellsRendered={handleCellsRendered}
         />
       ) : null}
     </div>
