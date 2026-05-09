@@ -43,14 +43,12 @@ function dedupeFlattenPages(pages: { products: ProductPreview[] }[]): ShopProduc
 export type WalmartProductsCatalogProps = {
   catalogSearch: string;
   title?: string;
-  description?: string;
   className?: string;
 };
 
 export function WalmartProductsCatalog({
   catalogSearch,
   title = "Walmart marketplace",
-  description,
   className,
 }: WalmartProductsCatalogProps) {
   const router = useRouter();
@@ -113,26 +111,14 @@ export function WalmartProductsCatalog({
     flatProducts.length === 0 &&
     !isFetching;
 
-  const defaultDescription =
-    "Resultados desde la API (proxy en servidor). Buscá con la barra superior o usá estos atajos.";
-  const descriptionText = description ?? defaultDescription;
-
   const showStuckHint =
     searchTerm.length > 0 && fetchStatus === "idle" && !data && !isPending && !isError;
 
   return (
     <section className={cn("space-y-6", className)} aria-labelledby="catalogo-walmart-titulo">
-      <div className="space-y-3">
+      <div>
         <Typography as="h2" id="catalogo-walmart-titulo" variant="display" className="text-balance">
           {title}
-        </Typography>
-        <Typography variant="subtitle" className="max-w-2xl text-pretty">
-          {descriptionText}{" "}
-          {searchTerm.length > 0 ? (
-            <span className="text-neutral-600 dark:text-neutral-400">
-              Búsqueda actual: «{searchTerm}».
-            </span>
-          ) : null}
         </Typography>
       </div>
 
